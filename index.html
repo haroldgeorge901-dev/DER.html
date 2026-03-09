@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Interativo - Estrutura Viária</title>
+    
+    <!-- MapLibre GL -->
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+        }
+        
+        .map-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Painel de controle */
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            width: 280px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        
+        .panel-header {
+            padding: 15px;
+            background: linear-gradient(135deg, #1e5799 0%, #207cca 100%);
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .panel-header h2 {
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+        }
+        
+        .panel-header p {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        
+        .panel-content {
+            padding: 15px;
+        }
+        
+        .layer-group {
+            margin-bottom: 20px;
+        }
+        
+        .group-title {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .layer-item {
+            margin-bottom: 12px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .layer-item:hover {
+            background: #e9ecef;
+        }
+        
+        .layer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        
+        .layer-name {
+            font-weight: 500;
+            color: #212529;
+        }
+        
+        .layer-source {
+            font-size: 0.7rem;
+            color: #6c757d;
+            font-family: monospace;
+        }
+        
+        .layer-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .layer-legend {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 5px;
+            font-size: 0.8rem;
+            color: #495057;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 4px;
+            border-radius: 2px;
+        }
+        
+        .legend-color.pitt {
+            background-color: #e41a1c;
+        }
+        
+        .legend-color.sre2025 {
+            background-color: #377eb8;
+        }
+        
+        .legend-color.infra2510 {
+            background-color: #4daf4a;
+        }
+        
+        .info-box {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e7f5ff;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #1e5799;
+            display: none;
+        }
+        
+        .info-box.active {
+            display: block;
+        }
+        
+        .info-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .info-content {
+            font-size: 0.85rem;
+        }
+        
+        .info-content div {
+            margin-bottom: 4px;
+        }
+        
+        .reset-btn {
+            width: 100%;
+            padding: 10px;
+            margin-top: 15px;
+            background: #1e5799;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        
+        .reset-btn:hover {
+            background: #154a7a;
+        }
+        
+        /* Botão de satélite */
+        .satellite-toggle {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            background: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid #1e5799;
+        }
+        
+        .satellite-toggle:hover {
+            transform: scale(1.1);
+            background: #1e5799;
+            color: white;
+        }
+        
+        .satellite-toggle i {
+            font-size: 1.5rem;
+            color: #1e5799;
+        }
+        
+        .satellite-toggle:hover i {
+            color: white;
+        }
+        
+        .satellite-toggle .tooltip {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            background: #333;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            margin-bottom: 10px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s;
+        }
+        
+        .satellite-toggle:hover .tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+    </style>
+</head>
+<body>
+    <div class="map-container">
+        <div id="map"></div>
+        
+        <!-- Painel de controle -->
+        <div class="control-panel">
+            <div class="panel-header">
+                <h2><i class="fas fa-road" style="margin-right: 8px;"></i>Estrutura Viária</h2>
+                <p>PITT | SRE2025 | Infra 25.10</p>
+            </div>
+            
+            <div class="panel-content">
+                <div class="layer-group">
+                    <div class="group-title">Camadas Disponíveis</div>
+                    
+                    <!-- Camada PITT -->
+                    <div class="layer-item">
+                        <div class="layer-header">
+                            <span class="layer-name">PITT</span>
+                            <input type="checkbox" class="layer-checkbox" id="layer-pitt" checked>
+                        </div>
+                        <div class="layer-source">source-layer: infraestrutura_PITT</div>
+                        <div class="layer-legend">
+                            <div class="legend-color pitt"></div>
+                            <span>Vias principais</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Camada SRE2025 -->
+                    <div class="layer-item">
+                        <div class="layer-header">
+                            <span class="layer-name">SRE2025</span>
+                            <input type="checkbox" class="layer-checkbox" id="layer-sre2025" checked>
+                        </div>
+                        <div class="layer-source">source-layer: SRE2025_01</div>
+                        <div class="layer-legend">
+                            <div class="legend-color sre2025"></div>
+                            <span>Vias secundárias</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Camada Infraestrutura 25.10 -->
+                    <div class="layer-item">
+                        <div class="layer-header">
+                            <span class="layer-name">Infraestrutura 25.10</span>
+                            <input type="checkbox" class="layer-checkbox" id="layer-infra2510" checked>
+                        </div>
+                        <div class="layer-source">source-layer: infraestrutura_25_10</div>
+                        <div class="layer-legend">
+                            <div class="legend-color infra2510"></div>
+                            <span>Vias de acesso</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Caixa de informações da feição -->
+                <div class="info-box" id="info-box">
+                    <div class="info-title">
+                        <i class="fas fa-info-circle"></i> Informações da Via
+                    </div>
+                    <div class="info-content" id="feature-info">
+                        Clique em uma via para ver detalhes
+                    </div>
+                </div>
+                
+                <!-- Botão reset -->
+                <button class="reset-btn" id="reset-view">
+                    <i class="fas fa-sync-alt"></i> Resetar Vista
+                </button>
+            </div>
+        </div>
+        
+        <!-- Botão satélite -->
+        <div class="satellite-toggle" id="satellite-toggle">
+            <div class="tooltip">Alternar para satélite</div>
+            <i class="fas fa-satellite"></i>
+        </div>
+    </div>
+
+    <script>
+        // Definição do estilo do mapa com as fontes e camadas
+        const mapStyle = {
+            "version": 8,
+            "sources": {
+                // Fonte do mapa base (OpenStreetMap)
+                "osm": {
+                    "type": "raster",
+                    "tiles": [
+                        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    ],
+                    "tileSize": 256,
+                    "attribution": "© OpenStreetMap"
+                },
+                
+                // Fonte PITT
+                "pitt": {
+                    "type": "vector",
+                    "tiles": [
+                        "https://haroldgeorge901-dev.github.io/PITT/TILES/{z}/{x}/{y}.pbf"
+                    ],
+                    "minzoom": 0,
+                    "maxzoom": 18,
+                    "attribution": "PITT"
+                },
+                
+                // Fonte SRE2025
+                "sre2025": {
+                    "type": "vector",
+                    "tiles": [
+                        "https://haroldgeorge901-dev.github.io/SRE2025/TILES/{z}/{x}/{y}.pbf"
+                    ],
+                    "minzoom": 0,
+                    "maxzoom": 18,
+                    "attribution": "SRE2025"
+                },
+                
+                // Fonte Infraestrutura 25.10
+                "infra2510": {
+                    "type": "vector",
+                    "tiles": [
+                        "https://haroldgeorge901-dev.github.io/infra_2510/TILES/{z}/{x}/{y}.pbf"
+                    ],
+                    "minzoom": 0,
+                    "maxzoom": 18,
+                    "attribution": "Infraestrutura 25.10"
+                }
+            },
+            
+            "layers": [
+                // Camada base OSM
+                {
+                    "id": "osm-base",
+                    "type": "raster",
+                    "source": "osm"
+                },
+                
+                // Camada PITT (vermelho)
+                {
+                    "id": "pitt-ruas",
+                    "type": "line",
+                    "source": "pitt",
+                    "source-layer": "infraestrutura_PITT",
+                    "layout": {
+                        "line-join": "round",
+                        "line-cap": "round",
+                        "visibility": "visible"
+                    },
+                    "paint": {
+                        "line-color": "#e41a1c",
+                        "line-width": [
+                            "interpolate",
+                            ["linear"],
+                            ["zoom"],
+                            0, 0.5,
+                            5, 1.5,
+                            10, 3,
+                            15, 5
+                        ],
+                        "line-opacity": 0.9
+                    }
+                },
+                
+                // Camada SRE2025 (azul)
+                {
+                    "id": "sre2025-ruas",
+                    "type": "line",
+                    "source": "sre2025",
+                    "source-layer": "SRE2025_01",
+                    "layout": {
+                        "line-join": "round",
+                        "line-cap": "round",
+                        "visibility": "visible"
+                    },
+                    "paint": {
+                        "line-color": "#377eb8",
+                        "line-width": [
+                            "interpolate",
+                            ["linear"],
+                            ["zoom"],
+                            0, 0.5,
+                            5, 1.5,
+                            10, 3,
+                            15, 5
+                        ],
+                        "line-opacity": 0.9
+                    }
+                },
+                
+                // Camada Infraestrutura 25.10 (verde)
+                {
+                    "id": "infra2510-ruas",
+                    "type": "line",
+                    "source": "infra2510",
+                    "source-layer": "infraestrutura_25_10",
+                    "layout": {
+                        "line-join": "round",
+                        "line-cap": "round",
+                        "visibility": "visible"
+                    },
+                    "paint": {
+                        "line-color": "#4daf4a",
+                        "line-width": [
+                            "interpolate",
+                            ["linear"],
+                            ["zoom"],
+                            0, 0.5,
+                            5, 1.5,
+                            10, 3,
+                            15, 5
+                        ],
+                        "line-opacity": 0.9
+                    }
+                }
+            ]
+        };
+
+        // Inicializar o mapa
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: mapStyle,
+            center: [-44.0, -20.0], // Centro aproximado da região
+            zoom: 10,
+            maxZoom: 18,
+            minZoom: 5
+        });
+
+        // Adicionar controles de navegação
+        map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+        // Estado das camadas
+        let satelliteMode = false;
+        let osmLayer = null;
+        let satelliteLayer = null;
+
+        // Função para alternar visibilidade das camadas
+        function toggleLayer(layerId, visible) {
+            const visibility = visible ? 'visible' : 'none';
+            map.setLayoutProperty(layerId, 'visibility', visibility);
+        }
+
+        // Event listeners para os checkboxes
+        document.getElementById('layer-pitt').addEventListener('change', (e) => {
+            toggleLayer('pitt-ruas', e.target.checked);
+        });
+
+        document.getElementById('layer-sre2025').addEventListener('change', (e) => {
+            toggleLayer('sre2025-ruas', e.target.checked);
+        });
+
+        document.getElementById('layer-infra2510').addEventListener('change', (e) => {
+            toggleLayer('infra2510-ruas', e.target.checked);
+        });
+
+        // Função para alternar entre mapa base e satélite
+        function toggleSatelliteView() {
+            if (!satelliteMode) {
+                // Adicionar camada de satélite
+                if (!satelliteLayer) {
+                    map.addSource('satellite', {
+                        'type': 'raster',
+                        'tiles': [
+                            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                        ],
+                        'tileSize': 256,
+                        'attribution': '© Esri'
+                    });
+                    
+                    map.addLayer({
+                        'id': 'satellite-base',
+                        'type': 'raster',
+                        'source': 'satellite'
+                    }, 'pitt-ruas'); // Adicionar antes das camadas de rua
+                } else {
+                    map.setLayoutProperty('satellite-base', 'visibility', 'visible');
+                }
+                
+                // Esconder OSM
+                map.setLayoutProperty('osm-base', 'visibility', 'none');
+                
+                satelliteMode = true;
+                document.getElementById('satellite-toggle').classList.add('active');
+                document.querySelector('.satellite-toggle i').className = 'fas fa-map';
+                document.querySelector('.tooltip').textContent = 'Alternar para mapa de ruas';
+            } else {
+                // Mostrar OSM
+                map.setLayoutProperty('osm-base', 'visibility', 'visible');
+                
+                // Esconder satélite
+                if (satelliteLayer) {
+                    map.setLayoutProperty('satellite-base', 'visibility', 'none');
+                }
+                
+                satelliteMode = false;
+                document.getElementById('satellite-toggle').classList.remove('active');
+                document.querySelector('.satellite-toggle i').className = 'fas fa-satellite';
+                document.querySelector('.tooltip').textContent = 'Alternar para satélite';
+            }
+        }
+
+        // Event listener para o botão de satélite
+        document.getElementById('satellite-toggle').addEventListener('click', toggleSatelliteView);
+
+        // Função para resetar a vista
+        document.getElementById('reset-view').addEventListener('click', () => {
+            map.flyTo({
+                center: [-44.0, -20.0],
+                zoom: 10,
+                essential: true
+            });
+        });
+
+        // Função para mostrar informações da feição ao clicar
+        map.on('click', (e) => {
+            const features = map.queryRenderedFeatures(e.point);
+            const infoBox = document.getElementById('info-box');
+            const featureInfo = document.getElementById('feature-info');
+            
+            // Filtrar apenas features das camadas de rua
+            const roadFeatures = features.filter(f => 
+                f.layer.id === 'pitt-ruas' || 
+                f.layer.id === 'sre2025-ruas' || 
+                f.layer.id === 'infra2510-ruas'
+            );
+            
+            if (roadFeatures.length > 0) {
+                const feature = roadFeatures[0];
+                let html = '';
+                
+                // Identificar a camada
+                let camada = '';
+                if (feature.layer.id === 'pitt-ruas') camada = 'PITT';
+                else if (feature.layer.id === 'sre2025-ruas') camada = 'SRE2025';
+                else if (feature.layer.id === 'infra2510-ruas') camada = 'Infra 25.10';
+                
+                html += `<div><strong>Camada:</strong> ${camada}</div>`;
+                
+                // Propriedades da feição
+                if (feature.properties) {
+                    Object.entries(feature.properties).forEach(([key, value]) => {
+                        if (value !== null && value !== undefined) {
+                            html += `<div><strong>${key}:</strong> ${value}</div>`;
+                        }
+                    });
+                }
+                
+                featureInfo.innerHTML = html;
+                infoBox.classList.add('active');
+            } else {
+                infoBox.classList.remove('active');
+            }
+        });
+
+        // Mudar o cursor ao passar sobre as ruas
+        map.on('mouseenter', 'pitt-ruas', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+        
+        map.on('mouseenter', 'sre2025-ruas', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+        
+        map.on('mouseenter', 'infra2510-ruas', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.on('mouseleave', 'pitt-ruas', () => {
+            map.getCanvas().style.cursor = '';
+        });
+        
+        map.on('mouseleave', 'sre2025-ruas', () => {
+            map.getCanvas().style.cursor = '';
+        });
+        
+        map.on('mouseleave', 'infra2510-ruas', () => {
+            map.getCanvas().style.cursor = '';
+        });
+
+        // Log de inicialização
+        console.log('🚀 Mapa inicializado com MapLibre GL');
+        console.log('📌 Camadas disponíveis:');
+        console.log('  - PITT (source-layer: infraestrutura_PITT)');
+        console.log('  - SRE2025 (source-layer: SRE2025_01)');
+        console.log('  - Infraestrutura 25.10 (source-layer: infraestrutura_25_10)');
+    </script>
+</body>
+</html>
